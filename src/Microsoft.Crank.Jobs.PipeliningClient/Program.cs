@@ -22,6 +22,7 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
         public static int ExecutionTimeSeconds { get; set; }
         public static int Connections { get; set; }
         public static List<string> Headers { get; set; }
+        public static bool CloseConnection { get; set; }
 
         private static List<KeyValuePair<int, int>> _statistics = new List<KeyValuePair<int, int>>();
 
@@ -36,6 +37,7 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
             var optionDuration = app.Option<int>("-d|--duration <N>", "Duration of the test in seconds. Default is 5.", CommandOptionType.SingleValue);
             var optionHeaders = app.Option("-H|--header <HEADER>", "HTTP header to add to request, e.g. \"User-Agent: edge\"", CommandOptionType.MultipleValue);
             var optionPipeline = app.Option<int>("-p|--pipeline <N>", "The pipelining depth", CommandOptionType.SingleValue);
+            var optionCloseConnection = app.Option<bool>("--closeConnection", "Whether to close the connection", CommandOptionType.NoValue);
 
             app.OnExecuteAsync(cancellationToken =>
             {
@@ -60,6 +62,8 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
                     : 10;
 
                 Headers = new List<string>(optionHeaders.Values);
+
+                CloseConnection = optionCloseConnection.HasValue();
 
                 return RunAsync();
             });
@@ -186,9 +190,9 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
                 // Creating a new connection every time it is necessary
                 using (var connection = new HttpConnection(ServerUrl, PipelineDepth, Headers))
                 {
-                    Console.WriteLine("Connection created ({0})", connectionId);
+                    //Console.WriteLine("Connection created ({0})", connectionId);
 
-                    await connection.ConnectAsync();
+                    //await connection.ConnectAsync();
 
                     try
                     {
@@ -197,6 +201,10 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
                         while (_running)
                         {
                             // sw.Start();
+
+                            // This is needed in cases where the connection is closed (either with the --closeConnection option or
+                            // if a "connection: close" header is specified.
+                            await connection.EnsureConnectedAsync();
 
                             var responses = await connection.SendRequestsAsync();
 
@@ -231,6 +239,11 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
                                 }
                             }
 
+                            if (CloseConnection)
+                            {
+                                await connection.ResetSocket();
+                            }
+
                             if (doBreak)
                             {
                                 break;
@@ -244,7 +257,7 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
                 }
             }
 
-            Console.WriteLine("Connection closed {0}", connectionId);
+            //Console.WriteLine("Connection closed {0}", connectionId);
 
 
             return result;

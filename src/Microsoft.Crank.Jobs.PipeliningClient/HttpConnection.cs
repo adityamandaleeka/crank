@@ -23,7 +23,7 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
         private readonly string _url;
         private readonly int _pipelineDepth;
         private readonly Memory<byte> _requestBytes;
-        private readonly Socket _socket;
+        private Socket _socket;
         private readonly IPEndPoint _hostEndPoint;
         private readonly Pipe _pipe;
 
@@ -98,6 +98,14 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
             var writing = FillPipeAsync(_socket, _pipe.Writer);
         }
 
+        public async Task EnsureConnectedAsync()
+        {            
+            if (!_socket.Connected)
+            {
+                await ResetSocket();
+            }
+        }
+
         public async Task<HttpResponse[]> SendRequestsAsync()
         {
             await _socket.SendAsync(_requestBytes, SocketFlags.None);
@@ -117,6 +125,17 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
             }
 
             return _responses;
+        }
+
+
+        public async Task ResetSocket()
+        {
+            _socket.Close();
+            
+            _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            //await _socket.ConnectAsync(_hostEndPoint);
+            await ConnectAsync();
+
         }
 
         public void Dispose()
