@@ -142,7 +142,13 @@ namespace Microsoft.Crank.Jobs.PipeliningClient
         {
             if (_socket != null && _socket.Connected)
             {
-                _socket.Shutdown(SocketShutdown.Both);
+                try
+                {
+                    // Server could have shut this down already.
+                    _socket.Shutdown(SocketShutdown.Both);
+                }
+                catch { }
+
                 _socket.Close();
             }
         }
